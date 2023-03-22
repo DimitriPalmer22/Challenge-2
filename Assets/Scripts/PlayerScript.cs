@@ -1,8 +1,10 @@
+using System;
 using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEditor.Animations;
 
 public class PlayerScript : MonoBehaviour
 {
@@ -32,6 +34,9 @@ public class PlayerScript : MonoBehaviour
     public AudioSource musicSource, sfxSource;
     public AudioClip coinCollected, gameWon, gameLost, levelWon;
 
+    public Animator animator;
+    private bool onGround = false;
+
     // Start is called before the first frame update
     void Start()
     {
@@ -41,11 +46,15 @@ public class PlayerScript : MonoBehaviour
 
         youWinText.enabled = false;
 
-
         playerScale = transform.localScale.x;
 
         SetScore(0);
         MoveToLevel();
+    }
+
+    void Update()
+    {
+
     }
 
     void FixedUpdate()
@@ -60,12 +69,22 @@ public class PlayerScript : MonoBehaviour
         else if (rd2d.velocity.x > 0) transform.localScale = new Vector3(playerScale, transform.localScale.y, transform.localScale.z);
 
         SpeedCheck();
+
+        AnimationCheck();
     }
     private void OnCollisionEnter2D(Collision2D collision)
     {
 
+        Debug.Log($"COLLDIED WITH: {collision.gameObject}");
+
+
         switch (collision.transform.tag)
         {
+
+            case "Ground":
+                onGround = true;
+                break;
+
             case "Coin":
                 SetScore(scoreValue + 1);
                 sfxSource.clip = coinCollected;
@@ -92,6 +111,16 @@ public class PlayerScript : MonoBehaviour
 
     }
 
+    private void OnCollisionExit2D(Collision2D collision)
+    {
+        switch (collision.transform.tag)
+        {
+            case "Ground":
+                onGround = false;
+                break;
+        }
+    }
+
     private void OnCollisionStay2D(Collision2D collision)
     {
         var myCollider = GetComponent<Collider2D>();
@@ -99,8 +128,14 @@ public class PlayerScript : MonoBehaviour
 
         if (collision.collider.tag == "Ground" && bottom > collision.contacts[0].point.y)
         {
+            // onGround = true;
+
             if (Input.GetKey(KeyCode.W) && !controlsDisabled)
                 rd2d.AddForce(new Vector2(0, jumpForce), ForceMode2D.Impulse);
+        }
+        else
+        {
+            // onGround = false;
         }
     }
 
@@ -182,6 +217,24 @@ public class PlayerScript : MonoBehaviour
     {
         Vector2 cLocation = levelLocations[currentLevel - 1];
         transform.position = cLocation;
+    }
+
+    private void AnimationCheck()
+    {
+        var collider = GetComponent<Collider2D>();
+
+        // var groundObjects = GameObject.FindWithTag("Ground");
+        // var cF = new ContactFilter2D();
+
+        // Collider2D[] res = new Collider2D[1];
+
+
+        if (!onGround) animator.SetInteger("State", 2);
+        else
+        {
+            if (Math.Abs(rd2d.velocity.x) >= 0.5f) animator.SetInteger("State", 1);
+            else animator.SetInteger("State", 0);
+        }
     }
 
 }
