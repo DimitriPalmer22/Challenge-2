@@ -11,21 +11,26 @@ public class PlayerScript : MonoBehaviour
     public float speed;
     public float jumpForce;
 
-    public Text score;
+    public Text scoreText;
+    public Text livesText;
     public Text youWinText;
 
     private int scoreValue = 0;
     private int coinCount;
     private int lives;
     private const int MAX_LIVES = 3;
-
-    private const float MAX_SPEED = 5f;
-    private bool gameWon = false;
+    private const float MAX_SPEED = 6f;
+    private bool controlsDisabled = false;
 
     private int currentLevel = 1;
     private int levelCount;
 
+    private float playerScale;
+
     public Vector2[] levelLocations;
+
+    public AudioSource musicSource, sfxSource;
+    public AudioClip coinCollected, gameWon, gameLost, levelWon;
 
     // Start is called before the first frame update
     void Start()
@@ -33,13 +38,13 @@ public class PlayerScript : MonoBehaviour
         rd2d = GetComponent<Rigidbody2D>();
 
         levelCount = levelLocations.Length;
-        coinCount = GetLevelCoinCount();
-        SetScoreText();
 
         youWinText.enabled = false;
 
-        lives = MAX_LIVES;
 
+        playerScale = transform.localScale.x;
+
+        SetScore(0);
         MoveToLevel();
     }
 
@@ -48,22 +53,41 @@ public class PlayerScript : MonoBehaviour
         float horiMovement = Input.GetAxis("Horizontal");
         float vertMovement = Input.GetAxis("Vertical");
 
-        if (!gameWon)
+        if (!controlsDisabled)
             rd2d.AddForce(new Vector2(horiMovement * speed, vertMovement * (speed / 2)));
+
+        if (rd2d.velocity.x < 0) transform.localScale = new Vector3(-playerScale, transform.localScale.y, transform.localScale.z);
+        else if (rd2d.velocity.x > 0) transform.localScale = new Vector3(playerScale, transform.localScale.y, transform.localScale.z);
 
         SpeedCheck();
     }
     private void OnCollisionEnter2D(Collision2D collision)
     {
-        if (collision.collider.tag == "Coin")
+
+        switch (collision.transform.tag)
         {
-            scoreValue += 1;
-            SetScoreText();
-            Destroy(collision.collider.gameObject);
+            case "Coin":
+                SetScore(scoreValue + 1);
+                sfxSource.clip = coinCollected;
+                sfxSource.Play();
+                Destroy(collision.collider.gameObject);
 
-            if (scoreValue >= coinCount)
-                YouWin();
+                if (scoreValue >= coinCount)
+                    YouWin();
+                break;
 
+            case "Enemy":
+                SetLives(lives - 1);
+                MoveToLevelNoReset();
+                Destroy(collision.gameObject);
+                rd2d.velocity = Vector2.zero;
+
+                if (lives <= 0)
+                    YouLose();
+                break;
+
+            default:
+                break;
         }
 
     }
@@ -73,14 +97,10 @@ public class PlayerScript : MonoBehaviour
         var myCollider = GetComponent<Collider2D>();
         float bottom = myCollider.bounds.center.y - myCollider.bounds.extents.y;
 
-        // Debug.Log($"Collision: {bottom} vs {collision.contacts[0].point.y}");
-
         if (collision.collider.tag == "Ground" && bottom > collision.contacts[0].point.y)
         {
-            if (Input.GetKey(KeyCode.W))
-            {
+            if (Input.GetKey(KeyCode.W) && !controlsDisabled)
                 rd2d.AddForce(new Vector2(0, jumpForce), ForceMode2D.Impulse);
-            }
         }
     }
 
@@ -92,9 +112,17 @@ public class PlayerScript : MonoBehaviour
             rd2d.velocity = new Vector2(MAX_SPEED, rd2d.velocity.y);
     }
 
-    private void SetScoreText()
+    private void SetScore(int amt)
     {
-        score.text = $"Score: {scoreValue} / {coinCount}";
+        scoreValue = amt;
+        scoreText.text = $"Score: {scoreValue} / {coinCount}";
+    }
+
+    private void SetLives(int amt)
+    {
+        lives = amt;
+        livesText.text = $"Lives: {lives}";
+
     }
 
     private void YouWin()
@@ -104,8 +132,28 @@ public class PlayerScript : MonoBehaviour
         if (currentLevel > levelCount)
         {
             youWinText.enabled = true;
-            gameWon = true;
+            controlsDisabled = true;
+
+            musicSource.Stop();
+            musicSource.clip = gameWon;
+            musicSource.Play();
+
         }
+        else
+        {
+            MoveToLevel();
+        }
+    }
+
+    private void YouLose()
+    {
+        controlsDisabled = true;
+        youWinText.text = $"You Lose!\nGame by Dimitri Palmer";
+        youWinText.enabled = true;
+
+        musicSource.Stop();
+        musicSource.clip = gameLost;
+        musicSource.Play();
 
     }
 
@@ -119,6 +167,18 @@ public class PlayerScript : MonoBehaviour
     }
 
     private void MoveToLevel()
+    {
+        MoveToLevelNoReset();
+
+        SetLives(MAX_LIVES);
+
+        SetScore(0);
+        coinCount = GetLevelCoinCount();
+
+        MoveToLevelNoReset();
+    }
+
+    private void MoveToLevelNoReset()
     {
         Vector2 cLocation = levelLocations[currentLevel - 1];
         transform.position = cLocation;
